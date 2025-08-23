@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# download script: curl -O https://raw.githubusercontent.com/travusgonzalez/linux-administration/refs/heads/main/debian/ssh/enable-ssh.sh
 # make executable: chmod +x enable-ssh.sh
 # run script: ./enable-ssh.sh
 
