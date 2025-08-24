@@ -5,7 +5,7 @@
 
 # download script: curl -O https://raw.githubusercontent.com/travusgonzalez/linux-administration/refs/heads/main/debian/enable-ufw.sh
 # make executable: chmod +x enable-ufw.sh
-# run script: ./enable-ssh.sh
+# run script: ./enable-ufw.sh
 
 # Exit immediately if a command exits with a non-zero status
 set -e
