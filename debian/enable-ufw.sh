@@ -1,7 +1,7 @@
 #!/bin/bash
 # UFW setup for Pi-hole on Debian
 # UFW (Uncomplicated Firewall) is a user-friendly front-end for managing Linux firewall rules to control network traffic.
-# SSH and web admin restricted to local subnet, DNS open
+# SSH DNS, and web admin restricted to local subnet
 
 # download script: curl -O https://raw.githubusercontent.com/travusgonzalez/linux-administration/refs/heads/main/debian/enable-ufw.sh
 # make executable: chmod +x enable-ufw.sh
@@ -28,9 +28,9 @@ LOCAL_NET=$(ip -4 route show default | awk '{print $3}' | awk -F. '{print $1 "."
 
 echo "Detected local subnet: $LOCAL_NET"
 
-# Allow DNS (accessible from anywhere)
-sudo ufw allow 53/tcp
-sudo ufw allow 53/udp
+# Allow DNS only from local subnet
+sudo ufw allow from $LOCAL_NET to any port 53 proto tcp
+sudo ufw allow from $LOCAL_NET to any port 53 proto udp
 
 # Allow Pi-hole web admin interface only from local subnet
 sudo ufw allow from $LOCAL_NET to any port 80 proto tcp
