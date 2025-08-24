@@ -4,7 +4,7 @@ set -e
 # -----------------------------
 # Configuration
 # -----------------------------
-GITHUB_USER="username"        # <-- Replace with your GitHub username
+GITHUB_USER="travusgonzalez"        # <-- Replace with your GitHub username
 REPO_NAME="repo"              # <-- Replace with your repository name
 BRANCH="main"                 # <-- Branch name
 FOLDER="debian"               # <-- Folder in the repo containing scripts
