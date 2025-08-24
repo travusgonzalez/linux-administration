@@ -42,4 +42,4 @@ EOL
 
 sudo systemctl daemon-reload
 
-echo "Server setup complete. Use add_site.sh to create a new website."
+echo "Server setup complete. Use add-site.sh to create a new website."
