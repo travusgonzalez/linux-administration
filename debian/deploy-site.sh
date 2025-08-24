@@ -1,4 +1,5 @@
 #!/bin/bash
+# A script to deploy or update a .NET web application from a GitHub repository.
 set -e
 
 if [ -z "$1" ] || [ -z "$2" ]; then
@@ -21,13 +22,23 @@ if [ -f "$ENV_FILE" ]; then
     cp "$ENV_FILE" "$ENV_FILE.bak"
 fi
 
-# Clone or update repository
-if [ -d "$SITE_DIR/.git" ]; then
-    echo "Repository already exists. Pulling latest changes..."
-    git -C "$SITE_DIR" pull
+# Initialize or update repository
+if [ ! -d "$SITE_DIR/.git" ]; then
+    echo "Initializing repository in $SITE_DIR..."
+    git init "$SITE_DIR"
+    git -C "$SITE_DIR" remote add origin "$REPO_URL"
+    git -C "$SITE_DIR" fetch
+    # Try main first, then master
+    if git -C "$SITE_DIR" rev-parse --verify origin/main >/dev/null 2>&1; then
+        git -C "$SITE_DIR" checkout -t origin/main
+    else
+        git -C "$SITE_DIR" checkout -t origin/master
+    fi
 else
-    echo "Cloning repository into $SITE_DIR..."
-    git clone "$REPO_URL" "$SITE_DIR"
+    echo "Repository already exists. Resetting to latest from remote..."
+    git -C "$SITE_DIR" fetch --all
+    git -C "$SITE_DIR" reset --hard origin/main || git -C "$SITE_DIR" reset --hard origin/master
+    git -C "$SITE_DIR" clean -fd
 fi
 
 # Restore .env
@@ -37,7 +48,6 @@ if [ -f "$ENV_FILE.bak" ]; then
 fi
 
 # Optional: build or restart your .NET app
-# Example: using systemd service
 SERVICE_NAME="${SITE}.service"
 if systemctl is-active --quiet "$SERVICE_NAME"; then
     echo "Restarting existing service $SERVICE_NAME..."
@@ -46,4 +56,4 @@ else
     echo "Service $SERVICE_NAME does not exist yet. Please create systemd service to run your app."
 fi
 
-echo "✅ Deployment complete for $SITE."
+echo "✅ Deployment complete for http://$SITE."
