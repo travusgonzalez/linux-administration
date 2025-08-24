@@ -2,69 +2,48 @@
 set -e
 
 if [ -z "$1" ] || [ -z "$2" ]; then
-  echo "Usage: $0 domain.com https://github.com/user/repo.git"
+  echo "Usage: $0 domain.com <github_repo_url>"
   exit 1
 fi
 
 SITE=$1
-REPO=$2
+REPO_URL=$2
 WEB_ROOT="/var/www"
 SITE_DIR="$WEB_ROOT/$SITE"
 
-if [ ! -d "$SITE_DIR" ]; then
-  echo "❌ Site $SITE does not exist. Run add-site.sh first."
-  exit 1
+# Ensure site directory exists
+mkdir -p "$SITE_DIR"
+
+# Backup existing .env if it exists
+ENV_FILE="$SITE_DIR/.env"
+if [ -f "$ENV_FILE" ]; then
+    echo "Backing up existing .env..."
+    cp "$ENV_FILE" "$ENV_FILE.bak"
 fi
 
-# -----------------------------
-# 1. Get repo (clone or update)
-# -----------------------------
-if [ ! -d "$SITE_DIR/.git" ]; then
-  git clone "$REPO" "$SITE_DIR"
+# Clone or update repository
+if [ -d "$SITE_DIR/.git" ]; then
+    echo "Repository already exists. Pulling latest changes..."
+    git -C "$SITE_DIR" pull
 else
-  cd "$SITE_DIR"
-  git pull
+    echo "Cloning repository into $SITE_DIR..."
+    git clone "$REPO_URL" "$SITE_DIR"
 fi
 
-# -----------------------------
-# 2. Detect DLL name from .csproj
-# -----------------------------
-cd "$SITE_DIR"
-CSPROJ=$(find . -maxdepth 1 -name "*.csproj" | head -n 1)
-
-if [ -z "$CSPROJ" ]; then
-  echo "❌ No .csproj found in $SITE_DIR"
-  exit 1
+# Restore .env
+if [ -f "$ENV_FILE.bak" ]; then
+    echo "Restoring .env..."
+    mv "$ENV_FILE.bak" "$ENV_FILE"
 fi
 
-DLL_NAME=$(grep -oPm1 "(?<=<AssemblyName>)[^<]+" "$CSPROJ")
-
-# If <AssemblyName> not set, fall back to project file name
-if [ -z "$DLL_NAME" ]; then
-  DLL_NAME=$(basename "$CSPROJ" .csproj)
+# Optional: build or restart your .NET app
+# Example: using systemd service
+SERVICE_NAME="${SITE}.service"
+if systemctl is-active --quiet "$SERVICE_NAME"; then
+    echo "Restarting existing service $SERVICE_NAME..."
+    sudo systemctl restart "$SERVICE_NAME"
+else
+    echo "Service $SERVICE_NAME does not exist yet. Please create systemd service to run your app."
 fi
 
-# -----------------------------
-# 3. Publish project
-# -----------------------------
-dotnet publish "$CSPROJ" -c Release -o "$SITE_DIR"
-
-DLL="$SITE_DIR/$DLL_NAME.dll"
-if [ ! -f "$DLL" ]; then
-  echo "❌ Expected output DLL $DLL not found"
-  exit 1
-fi
-
-# -----------------------------
-# 4. Create symlink so systemd uses domain name
-# -----------------------------
-ln -sf "$DLL_NAME.dll" "$SITE_DIR/$SITE.dll"
-
-# -----------------------------
-# 5. Enable + restart systemd
-# -----------------------------
-sudo systemctl enable kestrel@$SITE
-sudo systemctl restart kestrel@$SITE
-
-echo "✅ Deployment complete for $SITE from $REPO"
-echo "   Running: $DLL"
+echo "✅ Deployment complete for $SITE."
