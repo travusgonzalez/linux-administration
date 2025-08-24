@@ -1,34 +1,42 @@
 #!/bin/bash
 set -e
 
+# -----------------------------
 # Configuration
-GITHUB_USER="travusgonzalez"
-REPO_NAME="linux-administration"
-BRANCH="main"
-FOLDER="debian"
-DEST_DIR="$(pwd)/scripts"
+# -----------------------------
+GITHUB_USER="travusgonzalez"             # GitHub username
+REPO_NAME="linux-administration"         # Repository name
+BRANCH="main"                             # Branch name
+FOLDER="debian"                           # Folder containing scripts
+DEST_DIR="$(pwd)/scripts"                 # Local folder to save scripts
 
+# URL to the manifest file in GitHub repo
+MANIFEST_URL="https://raw.githubusercontent.com/$GITHUB_USER/$REPO_NAME/refs/heads/$BRANCH/$FOLDER/manifest.txt"
+
+# -----------------------------
+# Prepare destination folder
+# -----------------------------
 mkdir -p "$DEST_DIR"
 
-# GitHub folder URL
-GITHUB_URL="https://github.com/$GITHUB_USER/$REPO_NAME/tree/$BRANCH/$FOLDER"
-
-echo "Fetching file list from GitHub folder: $GITHUB_URL"
-
-# Scrape the folder page for file names ending with .sh
-FILES=$(curl -fsSL "$GITHUB_URL" \
-    | grep -oP 'js-navigation-open[^>]+>([^<]+\.sh)<\/a>' \
-    | sed -E 's/.*>([^<]+)<\/a>/\1/')
+# -----------------------------
+# Fetch manifest
+# -----------------------------
+echo "Fetching manifest from GitHub..."
+FILES=$(curl -fsSL "$MANIFEST_URL")
 
 if [ -z "$FILES" ]; then
-    echo "❌ No scripts found in folder. Check URL or branch."
+    echo "❌ Failed to fetch manifest or manifest is empty."
     exit 1
 fi
 
-# Download each script from raw.githubusercontent.com
+# -----------------------------
+# Download each script
+# -----------------------------
 for file in $FILES; do
     file=$(echo "$file" | xargs)  # trim spaces
-    URL="https://raw.githubusercontent.com/$GITHUB_USER/$REPO_NAME/$BRANCH/$FOLDER/$file"
+    if [ -z "$file" ]; then continue; fi
+
+    URL="https://raw.githubusercontent.com/$GITHUB_USER/$REPO_NAME/refs/heads/$BRANCH/$FOLDER/$file"
     DEST_FILE="$DEST_DIR/$file"
 
     echo "Downloading $file ..."
