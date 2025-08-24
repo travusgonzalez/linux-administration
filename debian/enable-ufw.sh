@@ -4,9 +4,8 @@
 # SSH and web admin restricted to local subnet, DNS open
 
 # download script: curl -O https://raw.githubusercontent.com/travusgonzalez/linux-administration/refs/heads/main/debian/enable-ufw.sh
-# make executable: chmod +x enable-ssh.sh
+# make executable: chmod +x enable-ufw.sh
 # run script: ./enable-ssh.sh
-
 
 # Exit immediately if a command exits with a non-zero status
 set -e
