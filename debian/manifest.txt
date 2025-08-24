@@ -1,4 +1,5 @@
 add-site.sh
+remove-site.sh
 deploy-site.sh
 enable-kestrel.sh
 enable-ssh.sh
