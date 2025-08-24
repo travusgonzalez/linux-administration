@@ -6,24 +6,28 @@ GITHUB_USER="travusgonzalez"
 REPO_NAME="linux-administration"
 BRANCH="main"
 FOLDER="debian"
-
-# Destination folder relative to current directory
 DEST_DIR="$(pwd)/scripts"
+
 mkdir -p "$DEST_DIR"
 
-# Ensure jq is installed
-if ! command -v jq &> /dev/null; then
-    echo "Installing jq..."
-    apt update && apt install -y jq
+# GitHub folder URL
+GITHUB_URL="https://github.com/$GITHUB_USER/$REPO_NAME/tree/$BRANCH/$FOLDER"
+
+echo "Fetching file list from GitHub folder: $GITHUB_URL"
+
+# Scrape the folder page for file names ending with .sh
+FILES=$(curl -fsSL "$GITHUB_URL" \
+    | grep -oP 'js-navigation-open[^>]+>([^<]+\.sh)<\/a>' \
+    | sed -E 's/.*>([^<]+)<\/a>/\1/')
+
+if [ -z "$FILES" ]; then
+    echo "❌ No scripts found in folder. Check URL or branch."
+    exit 1
 fi
 
-# Fetch file list using GitHub API
-echo "Fetching file list from GitHub..."
-FILES=$(curl -s "https://api.github.com/repos/$GITHUB_USER/$REPO_NAME/contents/$FOLDER?ref=$BRANCH" \
-    | jq -r '.[].name')
-
-# Download each file
+# Download each script from raw.githubusercontent.com
 for file in $FILES; do
+    file=$(echo "$file" | xargs)  # trim spaces
     URL="https://raw.githubusercontent.com/$GITHUB_USER/$REPO_NAME/$BRANCH/$FOLDER/$file"
     DEST_FILE="$DEST_DIR/$file"
 
