@@ -1,16 +1,20 @@
 #!/bin/bash
 # A script to deploy or update a .NET web application from a GitHub repository.
+# version: 1.10
+# Usage: ./deploy-site.sh domain.com
+# Ensure you have SSH access to the repository.
+
 set -e
 
-if [ -z "$1" ] || [ -z "$2" ]; then
-  echo "Usage: $0 domain.com <github_repo_url>"
+if [ -z "$1" ]; then
+  echo "Usage: $0 domain.com"
   exit 1
 fi
 
 SITE=$1
-REPO_URL=$2
 WEB_ROOT="/var/www"
 SITE_DIR="$WEB_ROOT/$SITE"
+REPO_URL="git@github.com:travusgonzalez/darkwinter.xyz.git"
 
 # Ensure site directory exists
 mkdir -p "$SITE_DIR"
@@ -56,4 +60,4 @@ else
     echo "Service $SERVICE_NAME does not exist yet. Please create systemd service to run your app."
 fi
 
-echo "✅ Deployment complete for http://$SITE."
+echo "✅ Deployment complete for $SITE."
