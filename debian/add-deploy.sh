@@ -1,6 +1,6 @@
 #!/bin/bash
 # Deploy or update a .NET site with systemd (framework-dependent or self-contained)
-# version: 6.6
+# version: 6.7
 # Usage: ./deploy-site.sh domain.com git_repo_url
 
 set -euo pipefail
@@ -28,6 +28,7 @@ PORT_FILE="$WEB_ROOT/ports.txt"
 BUILD_DIR="$SITE_DIR/build"
 SERVICE_NAME="kestrel@${SITE}"
 ENV_FILE="$SITE_DIR/.env"
+DOTNET_HOME="$SITE_DIR/.dotnet_home"
 
 # ------------------------------
 # 1️⃣ Determine next available port
@@ -51,12 +52,17 @@ sudo chown -R $USER:www-data "$SITE_DIR"
 sudo chmod -R 755 "$SITE_DIR"
 
 # ------------------------------
-# 3️⃣ Create .env file
+# 3️⃣ Create .env file & DOTNET_CLI_HOME
 # ------------------------------
-echo -e "${BLUE}📝 Creating .env for $SITE...${RESET}"
+echo -e "${BLUE}📝 Setting up .env and DOTNET_CLI_HOME for $SITE...${RESET}"
+sudo mkdir -p "$DOTNET_HOME"
+sudo chown -R www-data:www-data "$DOTNET_HOME"
+sudo chmod -R 700 "$DOTNET_HOME"
+
 sudo tee "$ENV_FILE" > /dev/null <<EOL
 DOTNET_URLS=http://0.0.0.0:$PORT
 ASPNETCORE_ENVIRONMENT=Production
+DOTNET_CLI_HOME=$DOTNET_HOME
 EOL
 sudo chown www-data:www-data "$ENV_FILE"
 sudo chmod 644 "$ENV_FILE"
@@ -115,11 +121,9 @@ dotnet publish "$SITE_DIR" -c Release -r linux-x64 -o "$BUILD_DIR" --self-contai
 # 7️⃣ Detect main executable or DLL
 # ------------------------------
 DLL_PATH=""
-# Prefer largest executable (self-contained)
 DLL_PATH=$(find "$BUILD_DIR" -maxdepth 1 -type f -executable -printf "%s %p\n" \
     | sort -nr | head -n 1 | awk '{print $2}')
 
-# Fallback: largest DLL (framework-dependent)
 if [ -z "$DLL_PATH" ]; then
     DLL_PATH=$(find "$BUILD_DIR" -maxdepth 1 -type f -name "*.dll" \
         ! -name "*deps*" ! -name "*runtimeconfig*" ! -name "*ref*" \
@@ -135,7 +139,6 @@ DLL_NAME=$(basename "$DLL_PATH")
 SOURCE_DIR=$(dirname "$DLL_PATH")
 echo -e "${GREEN}Detected main file: $DLL_NAME in $SOURCE_DIR${RESET}"
 
-# Determine ExecStart
 if [[ "$DLL_NAME" == *.dll ]]; then
     EXEC_CMD="/usr/bin/dotnet $SOURCE_DIR/$DLL_NAME"
 else
@@ -157,8 +160,6 @@ fi
 echo -e "${BLUE}🚀 Deploying published app...${RESET}"
 sudo find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.env' -exec rm -rf {} +
 sudo cp -r "$BUILD_DIR"/. "$SITE_DIR/"
-
-# Fix ownership safely
 sudo find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name ".git" ! -name ".env" -exec chown -R www-data:www-data {} +
 
 # ------------------------------
