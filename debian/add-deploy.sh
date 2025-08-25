@@ -1,10 +1,11 @@
 #!/bin/bash
 # Deploy or update a .NET site with systemd (framework-dependent)
-# version: 4.0
+# version: 5.0
+# Usage: ./deploy-site.sh domain.com git_repo_url
 
 set -e
 
-# Color codes for terminal
+# Terminal colors
 GREEN="\e[32m"
 YELLOW="\e[33m"
 RED="\e[31m"
@@ -12,8 +13,8 @@ BLUE="\e[34m"
 RESET="\e[0m"
 
 if [ -z "$1" ] || [ -z "$2" ]; then
-  echo -e "${RED}Usage: $0 domain.com git_repo_url${RESET}"
-  exit 1
+    echo -e "${RED}Usage: $0 domain.com git_repo_url${RESET}"
+    exit 1
 fi
 
 SITE=$1
@@ -93,14 +94,21 @@ fi
 echo -e "${BLUE}📦 Publishing .NET app (framework-dependent)...${RESET}"
 dotnet publish "$SITE_DIR" -c Release -o "$BUILD_DIR" --no-self-contained
 
-# 7️⃣ Detect main DLL
-DLL_PATH=$(find "$BUILD_DIR" -maxdepth 1 -type f -name "*.dll" | grep -v "ref\|deps\|runtimeconfig" | head -n 1)
-DLL_NAME=$(basename "$DLL_PATH")
-if [ -z "$DLL_NAME" ] || [ ! -f "$DLL_PATH" ]; then
+# 7️⃣ Detect the correct build folder containing the main DLL
+DLL_PATH=$(find "$BUILD_DIR" -type f -name "*.dll" | grep -v "ref\|deps\|runtimeconfig" | head -n 1)
+if [ -z "$DLL_PATH" ] || [ ! -f "$DLL_PATH" ]; then
+    # Search one level deeper (solution-level publish)
+    DLL_PATH=$(find "$BUILD_DIR" -mindepth 2 -maxdepth 2 -type f -name "*.dll" | grep -v "ref\|deps\|runtimeconfig" | head -n 1)
+fi
+
+if [ -z "$DLL_PATH" ] || [ ! -f "$DLL_PATH" ]; then
     echo -e "${RED}❌ Could not find main DLL in $BUILD_DIR${RESET}"
     exit 1
 fi
-echo -e "${GREEN}Detected main DLL: $DLL_NAME${RESET}"
+
+DLL_NAME=$(basename "$DLL_PATH")
+SOURCE_DIR=$(dirname "$DLL_PATH")
+echo -e "${GREEN}Detected main DLL: $DLL_NAME in $SOURCE_DIR${RESET}"
 
 # 8️⃣ Stop service if running
 if systemctl is-active --quiet "$SERVICE_NAME"; then
@@ -111,10 +119,9 @@ fi
 # 9️⃣ Deploy published app
 echo -e "${BLUE}🚀 Deploying published app...${RESET}"
 sudo find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.env' -exec rm -rf {} +
-sudo cp -r "$BUILD_DIR"/* "$SITE_DIR/"
-sudo rm -rf "$BUILD_DIR"
+sudo cp -r "$SOURCE_DIR"/* "$SITE_DIR/"
 
-# 🔟 Setup systemd service
+# 1️⃣0️⃣ Setup systemd service
 echo -e "${BLUE}⚡ Creating/updating systemd service...${RESET}"
 SERVICE_FILE="/etc/systemd/system/kestrel@.service"
 sudo tee "$SERVICE_FILE" > /dev/null <<EOL
@@ -146,4 +153,3 @@ sudo systemctl start "$SERVICE_NAME"
 echo -e "${GREEN}✅ $SITE successfully deployed!${RESET}"
 echo -e "${YELLOW}Assigned port: $PORT${RESET}"
 echo -e "${YELLOW}Check Nginx at http://$SITE or https://$SITE${RESET}"
-echo -e "Check service status with: ${YELLOW}sudo systemctl status $SERVICE_NAME${RESET}"
