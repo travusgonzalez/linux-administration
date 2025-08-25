@@ -2,9 +2,9 @@
 # Enable HTTPS for a local Nginx site using self-signed certificates
 # Author: Travus Gonzalez
 # Date: 2025-08-25
+# Version: 1.0
 
 set -euo pipefail
-set -x
 
 # --- Args ---
 if [ $# -lt 1 ]; then
