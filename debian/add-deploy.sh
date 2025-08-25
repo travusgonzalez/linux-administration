@@ -1,6 +1,6 @@
 #!/bin/bash
 # Deploy or update a .NET site with systemd (framework-dependent)
-# version: 6.0
+# version: 6.1
 # Usage: ./deploy-site.sh domain.com git_repo_url
 
 set -e
@@ -96,14 +96,9 @@ dotnet publish "$SITE_DIR" -c Release -o "$BUILD_DIR" --no-self-contained
 
 # 7️⃣ Detect the correct main DLL
 DLL_PATH=$(find "$BUILD_DIR" -type f -name "${SITE}.dll" | head -n 1)
-
 if [ -z "$DLL_PATH" ]; then
     # fallback: first DLL that is not a reference/dependency
     DLL_PATH=$(find "$BUILD_DIR" -type f -name "*.dll" | grep -v "ref\|deps\|runtimeconfig" | head -n 1)
-fi
-
-if [ -z "$DLL_PATH" ] || [ ! -f "$DLL_PATH" ]; then
-    DLL_PATH=$(find "$BUILD_DIR" -mindepth 2 -maxdepth 2 -type f -name "${SITE}.dll" | head -n 1)
 fi
 
 if [ -z "$DLL_PATH" ] || [ ! -f "$DLL_PATH" ]; then
@@ -126,7 +121,7 @@ echo -e "${BLUE}🚀 Deploying published app...${RESET}"
 sudo find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.env' -exec rm -rf {} +
 sudo cp -r "$SOURCE_DIR"/* "$SITE_DIR/"
 
-# 1️⃣0️⃣ Setup systemd service
+# 🔟 Setup systemd service
 echo -e "${BLUE}⚡ Creating/updating systemd service...${RESET}"
 SERVICE_FILE="/etc/systemd/system/kestrel@.service"
 sudo tee "$SERVICE_FILE" > /dev/null <<EOL
@@ -159,3 +154,5 @@ echo -e "${GREEN}✅ $SITE successfully deployed!${RESET}"
 echo -e "${YELLOW}Assigned port: $PORT${RESET}"
 echo -e "${YELLOW}Check Nginx at http://$SITE or https://$SITE${RESET}"
 echo -e "Check service status with: ${YELLOW}sudo systemctl status $SERVICE_NAME${RESET}"
+echo -e "View logs with: ${YELLOW}sudo journalctl -fu $SERVICE_NAME${RESET}"
+echo -e "To redeploy, run: ${YELLOW}./deploy-site.sh $
