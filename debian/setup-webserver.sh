@@ -3,7 +3,7 @@
 # ==============================================================================
 # Bash Script for Minimal Debian Web Server Setup with Multi-Site .NET Support
 #
-# Author: Gemini
+# Author: Travus Gonzalez
 # Date: 2025-08-25
 #
 # Description:
@@ -11,6 +11,9 @@
 # on a fresh Debian 12 (or later) system. It sets up .NET 8/9, Nginx as a
 # reverse proxy, UFW firewall, and placeholders for multi-site Kestrel apps
 # running as systemd services.
+# 
+# To install this script, execute the following commands on your Debian server:
+# sudo apt-get update && sudo apt-get install -y wget && wget https://raw.githubusercontent.com/travusgonzalez/linux-administration/refs/heads/main/debian/setup-webserver.sh && chmod +x setup-webserver.sh
 # ==============================================================================
 
 # --- Script Configuration ---
