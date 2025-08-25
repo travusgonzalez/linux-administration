@@ -1,20 +1,7 @@
 #!/bin/bash
-
-# ==============================================================================
-# Bash Script to Enable HTTPS on a Local Nginx Site using Self-Signed Certificates
-# with optional HTTP → HTTPS redirect
-#
+# Enable HTTPS for a local Nginx site using self-signed certificates
 # Author: Travus Gonzalez
 # Date: 2025-08-25
-#
-# Usage:
-#   sudo ./enable-https.sh domain_or_ip [--redirect]
-#
-# Description:
-#   Generates a self-signed SSL certificate for a local site,
-#   configures Nginx to use it, and reloads Nginx.
-#   --redirect will add HTTP → HTTPS redirection.
-# ==============================================================================
 
 set -euo pipefail
 
@@ -34,18 +21,14 @@ SSL_DIR="/etc/ssl/$DOMAIN"
 NGINX_CONF="/etc/nginx/sites-available/$DOMAIN"
 BACKUP_CONF="${NGINX_CONF}.bak"
 
-# --- Functions ---
 log() { echo -e "[\e[32mINFO\e[0m] $*"; }
 
 check_root() {
-  if [[ "$EUID" -ne 0 ]]; then
-    echo "ERROR: Must run as root (use sudo)."
-    exit 1
-  fi
+  [[ "$EUID" -ne 0 ]] && { echo "ERROR: Must run as root"; exit 1; }
 }
 
-generate_self_signed_cert() {
-  log "Generating self-signed certificate for $DOMAIN..."
+generate_cert() {
+  log "Generating self-signed certificate..."
   mkdir -p "$SSL_DIR"
   openssl req -x509 -nodes -days 365 \
     -newkey rsa:2048 \
@@ -54,29 +37,46 @@ generate_self_signed_cert() {
     -subj "/CN=$DOMAIN"
 }
 
-detect_http_port() {
-  if [ ! -f "$NGINX_CONF" ]; then
-    echo "ERROR: Nginx config not found at $NGINX_CONF"
-    exit 1
-  fi
-  PORT=$(grep -oP 'proxy_pass http://localhost:\K[0-9]+' "$NGINX_CONF" | head -n1)
-  if [ -z "$PORT" ]; then
-    echo "ERROR: Could not detect port in $NGINX_CONF"
-    exit 1
-  fi
+detect_port() {
+  [ ! -f "$NGINX_CONF" ] && { echo "ERROR: Nginx config not found at $NGINX_CONF"; exit 1; }
+  PORT=$(grep -oP 'proxy_pass\s+http://localhost:\K[0-9]+' "$NGINX_CONF" | head -n1)
+  [ -z "$PORT" ] && { echo "ERROR: Could not detect port in $NGINX_CONF"; exit 1; }
   log "Detected HTTP port: $PORT"
 }
 
-backup_nginx_conf() {
-  if [ ! -f "$BACKUP_CONF" ]; then
-    log "Backing up Nginx config to $BACKUP_CONF"
-    cp "$NGINX_CONF" "$BACKUP_CONF"
-  fi
+backup_conf() {
+  [ ! -f "$BACKUP_CONF" ] && { log "Backing up Nginx config"; cp "$NGINX_CONF" "$BACKUP_CONF"; }
 }
 
 configure_nginx_https() {
-  log "Adding HTTPS server block..."
-  
+  log "Creating HTTPS server block..."
+  cat > "$NGINX_CONF" <<EOF
+server {
+    listen 80;
+    server_name $DOMAIN;
+EOF
+
+  if [ "$REDIRECT" = true ]; then
+    cat >> "$NGINX_CONF" <<EOF
+    return 301 https://\$host\$request_uri;
+}
+EOF
+  else
+    cat >> "$NGINX_CONF" <<EOF
+    location / {
+        proxy_pass http://localhost:$PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection keep-alive;
+        proxy_set_header Host \$host;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+  fi
+
   cat >> "$NGINX_CONF" <<EOF
 
 server {
@@ -99,12 +99,6 @@ server {
 }
 EOF
 
-  if [ "$REDIRECT" = true ]; then
-    log "Adding HTTP → HTTPS redirect..."
-    # Wrap original HTTP block in redirect if needed
-    sed -i '/server_name '"$DOMAIN"'/,/}/ s/listen 80;/listen 80;\n    return 301 https:\/\/$host$request_uri;/' "$NGINX_CONF"
-  fi
-
   log "Testing Nginx configuration..."
   nginx -t
   log "Reloading Nginx..."
@@ -113,16 +107,15 @@ EOF
 
 # --- Main ---
 check_root
-generate_self_signed_cert
-detect_http_port
-backup_nginx_conf
+generate_cert
+detect_port
+backup_conf
 configure_nginx_https
 
 log "=== HTTPS enabled for $DOMAIN ==="
-echo "Certificate: $SSL_DIR/$DOMAIN.crt"
+echo "Cert: $SSL_DIR/$DOMAIN.crt"
 echo "Key: $SSL_DIR/$DOMAIN.key"
-if [ "$REDIRECT" = true ]; then
-  echo "HTTP → HTTPS redirect enabled"
-fi
-echo "You may need to trust the certificate in your browser to avoid warnings."
-echo "Done."
+[ "$REDIRECT" = true ] && echo "HTTP → HTTPS redirect enabled"
+echo "You may need to add a security exception in your browser for the self-signed certificate."
+echo "To revert changes, restore from backup: mv $BACKUP_CONF $NGINX_CONF && systemctl reload nginx"
+echo "=================================="
