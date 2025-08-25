@@ -1,6 +1,6 @@
 #!/bin/bash
 # Deploy or update a .NET site with systemd (framework-dependent or self-contained)
-# version: 6.7
+# version: 6.8
 # Usage: ./deploy-site.sh domain.com git_repo_url
 
 set -euo pipefail
@@ -199,3 +199,4 @@ echo -e "${YELLOW}Assigned port: $PORT${RESET}"
 echo -e "${YELLOW}Check Nginx at http://$SITE or https://$SITE${RESET}"
 echo -e "Check service status with: ${YELLOW}sudo systemctl status $SERVICE_NAME${RESET}"
 echo -e "View logs with: ${YELLOW}sudo journalctl -fu $SERVICE_NAME${RESET}"
+echo -e "To redeploy later, run: ${YELLOW}./deploy-site.sh $SITE $REPO_URL${RESET}"
