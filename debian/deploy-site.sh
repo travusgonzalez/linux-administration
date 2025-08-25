@@ -1,6 +1,6 @@
 #!/bin/bash
 # A script to deploy or update a .NET web application from a GitHub repository.
-# version: 1.10
+# version: 1.40
 # Usage: ./deploy-site.sh domain.com
 # Ensure you have SSH access to the repository.
 
@@ -15,6 +15,7 @@ SITE=$1
 WEB_ROOT="/var/www"
 SITE_DIR="$WEB_ROOT/$SITE"
 REPO_URL="git@github.com:travusgonzalez/darkwinter.xyz.git"
+BUILD_DIR="$SITE_DIR/build"
 
 # Ensure site directory exists
 mkdir -p "$SITE_DIR"
@@ -51,13 +52,29 @@ if [ -f "$ENV_FILE.bak" ]; then
     mv "$ENV_FILE.bak" "$ENV_FILE"
 fi
 
-# Optional: build or restart your .NET app
-SERVICE_NAME="${SITE}.service"
+# Build application
+echo "📦 Publishing .NET app..."
+dotnet publish "$SITE_DIR" -c Release -o "$BUILD_DIR"
+
+# Setup systemd service name
+SERVICE_NAME="kestrel@${SITE}"
+
+# Stop service before swapping files
 if systemctl is-active --quiet "$SERVICE_NAME"; then
-    echo "Restarting existing service $SERVICE_NAME..."
-    sudo systemctl restart "$SERVICE_NAME"
-else
-    echo "Service $SERVICE_NAME does not exist yet. Please create systemd service to run your app."
+    echo "🛑 Stopping service $SERVICE_NAME before deployment..."
+    sudo systemctl stop "$SERVICE_NAME"
 fi
 
+# Deploy published app
+echo "🚀 Deploying published app..."
+find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.env' ! -name 'build' -exec rm -rf {} +
+cp -r "$BUILD_DIR"/* "$SITE_DIR/"
+rm -rf "$BUILD_DIR"
+
+# Enable + start service
+echo "▶️ Starting service $SERVICE_NAME..."
+sudo systemctl enable "$SERVICE_NAME"
+sudo systemctl start "$SERVICE_NAME"
+
 echo "✅ Deployment complete for $SITE."
+sudo systemctl status $SERVICE_NAME"
