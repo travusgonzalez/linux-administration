@@ -4,6 +4,7 @@
 # Date: 2025-08-25
 
 set -euo pipefail
+set -x
 
 # --- Args ---
 if [ $# -lt 1 ]; then
@@ -49,7 +50,8 @@ backup_conf() {
 }
 
 configure_nginx_https() {
-  log "Creating HTTPS server block..."
+  # Overwrite the existing file to create a clean config
+  log "Creating or updating Nginx server block..."
   cat > "$NGINX_CONF" <<EOF
 server {
     listen 80;
@@ -77,6 +79,7 @@ EOF
 EOF
   fi
 
+  # Add the HTTPS server block
   cat >> "$NGINX_CONF" <<EOF
 
 server {
@@ -115,7 +118,7 @@ configure_nginx_https
 log "=== HTTPS enabled for $DOMAIN ==="
 echo "Cert: $SSL_DIR/$DOMAIN.crt"
 echo "Key: $SSL_DIR/$DOMAIN.key"
-[ "$REDIRECT" = true ] && echo "HTTP → HTTPS redirect enabled"
+[ "$REDIRECT" = true ] && echo "HTTP -> HTTPS redirect enabled"
 echo "You may need to add a security exception in your browser for the self-signed certificate."
 echo "To revert changes, restore from backup: mv $BACKUP_CONF $NGINX_CONF && systemctl reload nginx"
 echo "=================================="
