@@ -1,6 +1,6 @@
 #!/bin/bash
 # Deploy or update a .NET site with systemd (framework-dependent)
-# version: 5.0
+# version: 6.0
 # Usage: ./deploy-site.sh domain.com git_repo_url
 
 set -e
@@ -94,15 +94,20 @@ fi
 echo -e "${BLUE}📦 Publishing .NET app (framework-dependent)...${RESET}"
 dotnet publish "$SITE_DIR" -c Release -o "$BUILD_DIR" --no-self-contained
 
-# 7️⃣ Detect the correct build folder containing the main DLL
-DLL_PATH=$(find "$BUILD_DIR" -type f -name "*.dll" | grep -v "ref\|deps\|runtimeconfig" | head -n 1)
-if [ -z "$DLL_PATH" ] || [ ! -f "$DLL_PATH" ]; then
-    # Search one level deeper (solution-level publish)
-    DLL_PATH=$(find "$BUILD_DIR" -mindepth 2 -maxdepth 2 -type f -name "*.dll" | grep -v "ref\|deps\|runtimeconfig" | head -n 1)
+# 7️⃣ Detect the correct main DLL
+DLL_PATH=$(find "$BUILD_DIR" -type f -name "${SITE}.dll" | head -n 1)
+
+if [ -z "$DLL_PATH" ]; then
+    # fallback: first DLL that is not a reference/dependency
+    DLL_PATH=$(find "$BUILD_DIR" -type f -name "*.dll" | grep -v "ref\|deps\|runtimeconfig" | head -n 1)
 fi
 
 if [ -z "$DLL_PATH" ] || [ ! -f "$DLL_PATH" ]; then
-    echo -e "${RED}❌ Could not find main DLL in $BUILD_DIR${RESET}"
+    DLL_PATH=$(find "$BUILD_DIR" -mindepth 2 -maxdepth 2 -type f -name "${SITE}.dll" | head -n 1)
+fi
+
+if [ -z "$DLL_PATH" ] || [ ! -f "$DLL_PATH" ]; then
+    echo -e "${RED}❌ Could not find main DLL for $SITE in $BUILD_DIR${RESET}"
     exit 1
 fi
 
@@ -153,3 +158,4 @@ sudo systemctl start "$SERVICE_NAME"
 echo -e "${GREEN}✅ $SITE successfully deployed!${RESET}"
 echo -e "${YELLOW}Assigned port: $PORT${RESET}"
 echo -e "${YELLOW}Check Nginx at http://$SITE or https://$SITE${RESET}"
+echo -e "Check service status with: ${YELLOW}sudo systemctl status $SERVICE_NAME${RESET}"
