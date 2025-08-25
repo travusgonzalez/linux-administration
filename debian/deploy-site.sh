@@ -1,6 +1,6 @@
 #!/bin/bash
 # A script to deploy or update a .NET web application from a GitHub repository.
-# version: 1.40
+# version: 1.50
 # Usage: ./deploy-site.sh domain.com
 # Ensure you have SSH access to the repository.
 
@@ -18,38 +18,38 @@ REPO_URL="git@github.com:travusgonzalez/darkwinter.xyz.git"
 BUILD_DIR="$SITE_DIR/build"
 
 # Ensure site directory exists
-mkdir -p "$SITE_DIR"
+sudo mkdir -p "$SITE_DIR"
 
 # Backup existing .env if it exists
 ENV_FILE="$SITE_DIR/.env"
 if [ -f "$ENV_FILE" ]; then
     echo "Backing up existing .env..."
-    cp "$ENV_FILE" "$ENV_FILE.bak"
+    sudo cp "$ENV_FILE" "$ENV_FILE.bak"
 fi
 
 # Initialize or update repository
 if [ ! -d "$SITE_DIR/.git" ]; then
     echo "Initializing repository in $SITE_DIR..."
-    git init "$SITE_DIR"
-    git -C "$SITE_DIR" remote add origin "$REPO_URL"
-    git -C "$SITE_DIR" fetch
+    sudo git init "$SITE_DIR"
+    sudo git -C "$SITE_DIR" remote add origin "$REPO_URL"
+    sudo git -C "$SITE_DIR" fetch
     # Try main first, then master
-    if git -C "$SITE_DIR" rev-parse --verify origin/main >/dev/null 2>&1; then
-        git -C "$SITE_DIR" checkout -t origin/main
+    if sudo git -C "$SITE_DIR" rev-parse --verify origin/main >/dev/null 2>&1; then
+        sudo git -C "$SITE_DIR" checkout -t origin/main
     else
-        git -C "$SITE_DIR" checkout -t origin/master
+        sudo git -C "$SITE_DIR" checkout -t origin/master
     fi
 else
     echo "Repository already exists. Resetting to latest from remote..."
-    git -C "$SITE_DIR" fetch --all
-    git -C "$SITE_DIR" reset --hard origin/main || git -C "$SITE_DIR" reset --hard origin/master
-    git -C "$SITE_DIR" clean -fd
+    sudo git -C "$SITE_DIR" fetch --all
+    sudo git -C "$SITE_DIR" reset --hard origin/main || sudo git -C "$SITE_DIR" reset --hard origin/master
+    sudo git -C "$SITE_DIR" clean -fd
 fi
 
 # Restore .env
 if [ -f "$ENV_FILE.bak" ]; then
     echo "Restoring .env..."
-    mv "$ENV_FILE.bak" "$ENV_FILE"
+    sudo mv "$ENV_FILE.bak" "$ENV_FILE"
 fi
 
 # Build application
@@ -67,9 +67,9 @@ fi
 
 # Deploy published app
 echo "🚀 Deploying published app..."
-find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.env' ! -name 'build' -exec rm -rf {} +
-cp -r "$BUILD_DIR"/* "$SITE_DIR/"
-rm -rf "$BUILD_DIR"
+sudo find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.env' ! -name 'build' -exec rm -rf {} +
+sudo cp -r "$BUILD_DIR"/* "$SITE_DIR/"
+sudo rm -rf "$BUILD_DIR"
 
 # Enable + start service
 echo "▶️ Starting service $SERVICE_NAME..."
