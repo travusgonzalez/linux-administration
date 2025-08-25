@@ -1,6 +1,6 @@
 #!/bin/bash
-# Deploy .NET app with safe stop → copy → start, correct DLL path, and colored output
-# version: 1.71
+# Deploy .NET app with safe stop → copy → start, auto DLL detection, colored output, and permission fix
+# version: 1.72
 
 set -e
 
@@ -21,9 +21,13 @@ WEB_ROOT="/var/www"
 SITE_DIR="$WEB_ROOT/$SITE"
 REPO_URL="git@github.com:travusgonzalez/darkwinter.xyz.git"
 BUILD_DIR="$SITE_DIR/build"
+SERVICE_NAME="kestrel@${SITE}"
 
-# Ensure site directory exists
+# Fix ownership & permissions
+echo -e "${YELLOW}🔧 Fixing permissions for deploy user and service...${RESET}"
 sudo mkdir -p "$SITE_DIR"
+sudo chown -R $USER:$USER "$SITE_DIR"
+sudo chmod -R 755 "$SITE_DIR"
 
 # Backup existing .env
 ENV_FILE="$SITE_DIR/.env"
@@ -67,7 +71,6 @@ fi
 echo -e "${GREEN}Detected main DLL: $DLL_NAME${RESET}"
 
 # Stop service
-SERVICE_NAME="kestrel@${SITE}"
 if systemctl is-active --quiet "$SERVICE_NAME"; then
     echo -e "${YELLOW}🛑 Stopping service $SERVICE_NAME...${RESET}"
     sudo systemctl stop "$SERVICE_NAME"
@@ -109,6 +112,4 @@ sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl start "$SERVICE_NAME"
 
 echo -e "${GREEN}✅ Deployment complete for $SITE.${RESET}"
-
-
-sudo systemctl status $SERVICE_NAME"
+echo -e "${GREEN}You can check service status with: sudo systemctl status $SERVICE_NAME${RESET}"
