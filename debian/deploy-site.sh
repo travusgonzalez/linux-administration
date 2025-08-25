@@ -1,6 +1,6 @@
 #!/bin/bash
 # A script to deploy or update a .NET web application from a GitHub repository.
-# version: 1.50
+# version: 1.60
 # Usage: ./deploy-site.sh domain.com
 # Ensure you have SSH access to the repository.
 
@@ -27,23 +27,23 @@ if [ -f "$ENV_FILE" ]; then
     sudo cp "$ENV_FILE" "$ENV_FILE.bak"
 fi
 
-# Initialize or update repository
+# Initialize or update repository (run as current user, not sudo)
 if [ ! -d "$SITE_DIR/.git" ]; then
     echo "Initializing repository in $SITE_DIR..."
-    sudo git init "$SITE_DIR"
-    sudo git -C "$SITE_DIR" remote add origin "$REPO_URL"
-    sudo git -C "$SITE_DIR" fetch
+    git init "$SITE_DIR"
+    git -C "$SITE_DIR" remote add origin "$REPO_URL"
+    git -C "$SITE_DIR" fetch
     # Try main first, then master
-    if sudo git -C "$SITE_DIR" rev-parse --verify origin/main >/dev/null 2>&1; then
-        sudo git -C "$SITE_DIR" checkout -t origin/main
+    if git -C "$SITE_DIR" rev-parse --verify origin/main >/dev/null 2>&1; then
+        git -C "$SITE_DIR" checkout -t origin/main
     else
-        sudo git -C "$SITE_DIR" checkout -t origin/master
+        git -C "$SITE_DIR" checkout -t origin/master
     fi
 else
     echo "Repository already exists. Resetting to latest from remote..."
-    sudo git -C "$SITE_DIR" fetch --all
-    sudo git -C "$SITE_DIR" reset --hard origin/main || sudo git -C "$SITE_DIR" reset --hard origin/master
-    sudo git -C "$SITE_DIR" clean -fd
+    git -C "$SITE_DIR" fetch --all
+    git -C "$SITE_DIR" reset --hard origin/main || git -C "$SITE_DIR" reset --hard origin/master
+    git -C "$SITE_DIR" clean -fd
 fi
 
 # Restore .env
@@ -65,7 +65,7 @@ if systemctl is-active --quiet "$SERVICE_NAME"; then
     sudo systemctl stop "$SERVICE_NAME"
 fi
 
-# Deploy published app
+# Deploy published app (with sudo)
 echo "🚀 Deploying published app..."
 sudo find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.env' ! -name 'build' -exec rm -rf {} +
 sudo cp -r "$BUILD_DIR"/* "$SITE_DIR/"
@@ -77,4 +77,5 @@ sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl start "$SERVICE_NAME"
 
 echo "✅ Deployment complete for $SITE."
+
 sudo systemctl status $SERVICE_NAME"
