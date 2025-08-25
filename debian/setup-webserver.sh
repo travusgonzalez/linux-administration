@@ -30,9 +30,9 @@ set -u
 # via your hosts file or a local DNS server.
 declare -A SITES_CONFIG
 SITES_CONFIG=(
-    ["site1.local"]="5001"
-    ["site2.local"]="5002"
-    ["api.local"]="5003"
+    ["site1.lan"]="5001"
+    ["site2.lan"]="5002"
+    ["api.lan"]="5003"
 )
 
 # User and group to run the web applications. 'www-data' is standard for Nginx.
