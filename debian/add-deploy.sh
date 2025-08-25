@@ -1,10 +1,10 @@
 #!/bin/bash
-# Add and deploy a .NET site with automatic port assignment, Nginx + systemd
-# version: 3.1
+# Deploy or update a .NET site with systemd (framework-dependent)
+# version: 4.0
 
 set -e
 
-# Color codes
+# Color codes for terminal
 GREEN="\e[32m"
 YELLOW="\e[33m"
 RED="\e[31m"
@@ -25,11 +25,10 @@ BUILD_DIR="$SITE_DIR/build"
 SERVICE_NAME="kestrel@${SITE}"
 ENV_FILE="$SITE_DIR/.env"
 
-# 1️⃣ Determine next available port (check existing)
+# 1️⃣ Determine next available port
 START_PORT=5000
 PORT=$START_PORT
 if [ -f "$PORT_FILE" ]; then
-    # Read all used ports
     USED_PORTS=$(cat "$PORT_FILE")
     while [[ $USED_PORTS =~ $PORT ]]; do
         PORT=$((PORT+1))
@@ -37,13 +36,13 @@ if [ -f "$PORT_FILE" ]; then
 fi
 echo $PORT | sudo tee -a "$PORT_FILE" > /dev/null
 
-# 2️⃣ Create site directory and fix permissions
+# 2️⃣ Prepare site directory
 echo -e "${YELLOW}🔧 Creating site directory and setting permissions...${RESET}"
 sudo mkdir -p "$SITE_DIR"
 sudo chown -R $USER:www-data "$SITE_DIR"
 sudo chmod -R 755 "$SITE_DIR"
 
-# 3️⃣ Create .env
+# 3️⃣ Create .env file
 echo -e "${BLUE}📝 Creating .env for $SITE...${RESET}"
 sudo tee "$ENV_FILE" > /dev/null <<EOL
 DOTNET_URLS=http://0.0.0.0:$PORT
@@ -52,7 +51,7 @@ EOL
 sudo chown www-data:www-data "$ENV_FILE"
 sudo chmod 644 "$ENV_FILE"
 
-# 4️⃣ Set up Nginx
+# 4️⃣ Setup Nginx
 echo -e "${BLUE}⚙️ Setting up Nginx...${RESET}"
 NGINX_CONF="/etc/nginx/sites-available/${SITE}.conf"
 sudo tee "$NGINX_CONF" > /dev/null <<EOL
@@ -74,10 +73,10 @@ sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/$SITE.conf
 sudo nginx -t
 sudo systemctl reload nginx
 
-# Setup SSL
+# Optional: enable SSL
 sudo certbot --nginx -d $SITE --non-interactive --agree-tos -m admin@$SITE --redirect || true
 
-# 5️⃣ Pull or clone repository
+# 5️⃣ Clone or update repository
 echo -e "${BLUE}📥 Cloning/updating repository...${RESET}"
 if [ ! -d "$SITE_DIR/.git" ]; then
     git init "$SITE_DIR"
@@ -90,9 +89,9 @@ else
     git -C "$SITE_DIR" clean -fd
 fi
 
-# 6️⃣ Build the app
-echo -e "${BLUE}📦 Publishing .NET app...${RESET}"
-dotnet publish "$SITE_DIR" -c Release -o "$BUILD_DIR"
+# 6️⃣ Framework-dependent publish
+echo -e "${BLUE}📦 Publishing .NET app (framework-dependent)...${RESET}"
+dotnet publish "$SITE_DIR" -c Release -o "$BUILD_DIR" --no-self-contained
 
 # 7️⃣ Detect main DLL
 DLL_PATH=$(find "$BUILD_DIR" -maxdepth 1 -type f -name "*.dll" | grep -v "ref\|deps\|runtimeconfig" | head -n 1)
@@ -111,11 +110,11 @@ fi
 
 # 9️⃣ Deploy published app
 echo -e "${BLUE}🚀 Deploying published app...${RESET}"
-sudo find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.env' ! -name 'build' -exec rm -rf {} +
+sudo find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.env' -exec rm -rf {} +
 sudo cp -r "$BUILD_DIR"/* "$SITE_DIR/"
 sudo rm -rf "$BUILD_DIR"
 
-# 🔟 Update systemd service
+# 🔟 Setup systemd service
 echo -e "${BLUE}⚡ Creating/updating systemd service...${RESET}"
 SERVICE_FILE="/etc/systemd/system/kestrel@.service"
 sudo tee "$SERVICE_FILE" > /dev/null <<EOL
@@ -131,7 +130,6 @@ RestartSec=10
 KillSignal=SIGINT
 SyslogIdentifier=kestrel-%i
 User=www-data
-Environment=ASPNETCORE_ENVIRONMENT=Production
 EnvironmentFile=/var/www/%i/.env
 
 [Install]
@@ -145,6 +143,7 @@ echo -e "${BLUE}▶️ Starting service $SERVICE_NAME...${RESET}"
 sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl start "$SERVICE_NAME"
 
-echo -e "${GREEN}✅ $SITE successfully added and deployed!${RESET}"
-echo -e "${YELLOW}Nginx configured on port 80 with SSL, service running under systemd.${RESET}"
+echo -e "${GREEN}✅ $SITE successfully deployed!${RESET}"
 echo -e "${YELLOW}Assigned port: $PORT${RESET}"
+echo -e "${YELLOW}Check Nginx at http://$SITE or https://$SITE${RESET}"
+echo -e "Check service status with: ${YELLOW}sudo systemctl status $SERVICE_NAME${RESET}"
