@@ -1,6 +1,6 @@
 #!/bin/bash
 # Deploy .NET app with safe stop → copy → start, auto DLL detection, colored output, and permission fix
-# version: 1.72
+# version: 1.73
 
 set -e
 
@@ -60,17 +60,17 @@ fi
 echo -e "${BLUE}📦 Publishing .NET app...${RESET}"
 dotnet publish "$SITE_DIR" -c Release -o "$BUILD_DIR"
 
-# Detect the main DLL
-DLL_PATH=$(find "$BUILD_DIR" -maxdepth 1 -name "*.dll" | head -n 1)
+# Detect the main DLL by project name
+DLL_PATH=$(find "$BUILD_DIR" -maxdepth 1 -type f -name "${SITE}.dll" | head -n 1)
 DLL_NAME=$(basename "$DLL_PATH")
 
-if [ -z "$DLL_NAME" ]; then
-    echo -e "${RED}❌ No DLL found in build folder. Aborting.${RESET}"
+if [ -z "$DLL_NAME" ] || [ ! -f "$DLL_PATH" ]; then
+    echo -e "${RED}❌ Could not find main DLL: ${SITE}.dll in $BUILD_DIR${RESET}"
     exit 1
 fi
 echo -e "${GREEN}Detected main DLL: $DLL_NAME${RESET}"
 
-# Stop service
+# Stop service if running
 if systemctl is-active --quiet "$SERVICE_NAME"; then
     echo -e "${YELLOW}🛑 Stopping service $SERVICE_NAME...${RESET}"
     sudo systemctl stop "$SERVICE_NAME"
@@ -105,11 +105,10 @@ WantedBy=multi-user.target
 EOL
 
 sudo systemctl daemon-reload
-
-# Enable + start service
 echo -e "${BLUE}▶️ Starting service $SERVICE_NAME...${RESET}"
 sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl start "$SERVICE_NAME"
 
 echo -e "${GREEN}✅ Deployment complete for $SITE.${RESET}"
+
 echo -e "${GREEN}You can check service status with: sudo systemctl status $SERVICE_NAME${RESET}"
