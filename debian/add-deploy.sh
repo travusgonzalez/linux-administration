@@ -115,36 +115,65 @@ fi
 # ------------------------------
 echo -e "${BLUE}📦 Publishing .NET app...${RESET}"
 rm -rf "$BUILD_DIR"
-dotnet publish "$SITE_DIR" -c Release -r linux-x64 -o "$BUILD_DIR" --self-contained true /p:PublishSingleFile=false
+
+# Use self-contained single file for Linux x64
+dotnet publish "$SITE_DIR" \
+    -c Release \
+    -r linux-x64 \
+    -o "$BUILD_DIR" \
+    --self-contained true \
+    /p:PublishSingleFile=true \
+    /p:PublishTrimmed=true \
+    /p:AssemblyName="$SITE"
+
+# This guarantees an executable named "$BUILD_DIR/$SITE"
+EXECUTABLE="$BUILD_DIR/$SITE"
+sudo chmod +x "$EXECUTABLE"
+echo -e "${GREEN}Published main executable: $EXECUTABLE${RESET}"
+
 
 # ------------------------------
-# 7️⃣ Detect main executable or DLL
+# 7️⃣ Detect main executable or DLL (auto-detect self-contained)
 # ------------------------------
-DLL_PATH=""
-DLL_PATH=$(find "$BUILD_DIR" -maxdepth 1 -type f -executable -printf "%s %p\n" \
-    | sort -nr | head -n 1 | awk '{print $2}')
-
-if [ -z "$DLL_PATH" ]; then
-    DLL_PATH=$(find "$BUILD_DIR" -maxdepth 1 -type f -name "*.dll" \
-        ! -name "*deps*" ! -name "*runtimeconfig*" ! -name "*ref*" \
-        -printf "%s %p\n" | sort -nr | head -n 1 | awk '{print $2}')
-fi
-
-if [ -z "$DLL_PATH" ] || [ ! -f "$DLL_PATH" ]; then
-    echo -e "${RED}❌ Could not find main executable or DLL in $BUILD_DIR${RESET}"
+BUILD_CONTENT=$(ls -A "$BUILD_DIR")
+if [ -z "$BUILD_CONTENT" ]; then
+    echo -e "${RED}❌ Build directory is empty!${RESET}"
     exit 1
 fi
 
-DLL_NAME=$(basename "$DLL_PATH")
-SOURCE_DIR=$(dirname "$DLL_PATH")
-echo -e "${GREEN}Detected main file: $DLL_NAME in $SOURCE_DIR${RESET}"
+# Prefer a self-contained executable
+EXEC_CMD=$(find "$BUILD_DIR" -maxdepth 1 -type f -executable -printf "%p\n" | head -n 1)
 
-if [[ "$DLL_NAME" == *.dll ]]; then
-    EXEC_CMD="/usr/bin/dotnet $SOURCE_DIR/$DLL_NAME"
-else
-    EXEC_CMD="$SOURCE_DIR/$DLL_NAME"
+# Fallback: largest DLL (framework-dependent)
+if [ -z "$EXEC_CMD" ]; then
+    DLL_PATH=$(find "$BUILD_DIR" -maxdepth 1 -type f -name "*.dll" \
+        ! -name "*deps*" ! -name "*runtimeconfig*" ! -name "*ref*" \
+        -printf "%s %p\n" | sort -nr | head -n1 | awk '{print $2}')
+    if [ -z "$DLL_PATH" ]; then
+        echo -e "${RED}❌ Could not detect main executable or DLL in $BUILD_DIR${RESET}"
+        exit 1
+    fi
+    EXEC_CMD="/usr/bin/dotnet $DLL_PATH"
 fi
-echo -e "${BLUE}⚡ Using ExecStart: $EXEC_CMD${RESET}"
+
+echo -e "${GREEN}Detected main app: $EXEC_CMD${RESET}"
+# Prefer a self-contained executable
+EXEC_CMD=$(find "$BUILD_DIR" -maxdepth 1 -type f -executable -printf "%p\n" | head -n 1)
+
+# Fallback: largest DLL (framework-dependent)
+if [ -z "$EXEC_CMD" ]; then
+    EXEC_CMD=$(find "$BUILD_DIR" -maxdepth 1 -type f -name "*.dll" \
+        ! -name "*deps*" ! -name "*runtimeconfig*" ! -name "*ref*" \
+        -printf "%s %p\n" | sort -nr | head -n1 | awk '{print $2}')
+    EXEC_CMD="/usr/bin/dotnet $EXEC_CMD"
+fi
+
+if [ -z "$EXEC_CMD" ] || [ ! -f "${EXEC_CMD##* }" ]; then
+    echo -e "${RED}❌ Could not detect main executable or DLL in $BUILD_DIR${RESET}"
+    exit 1
+fi
+
+echo -e "${GREEN}Detected main app: $EXEC_CMD${RESET}"
 
 # ------------------------------
 # 8️⃣ Stop service if running
@@ -163,7 +192,7 @@ sudo cp -r "$BUILD_DIR"/. "$SITE_DIR/"
 sudo find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name ".git" ! -name ".env" -exec chown -R www-data:www-data {} +
 
 # ------------------------------
-# 🔟 Setup systemd service
+# 🔟 Setup systemd service (auto correct for self-contained)
 # ------------------------------
 SERVICE_FILE="/etc/systemd/system/kestrel@.service"
 sudo tee "$SERVICE_FILE" > /dev/null <<EOL
@@ -179,20 +208,22 @@ RestartSec=10
 KillSignal=SIGINT
 SyslogIdentifier=kestrel-%i
 User=www-data
-EnvironmentFile=$ENV_FILE
+Environment=DOTNET_URLS=http://0.0.0.0:$PORT
+Environment=DOTNET_CLI_HOME=$DOTNET_HOME
+Environment=ASPNETCORE_ENVIRONMENT=Production
 
 [Install]
 WantedBy=multi-user.target
 EOL
 
-sudo systemctl daemon-reload
 
 # ------------------------------
 # 1️⃣1️⃣ Enable + start service
 # ------------------------------
 echo -e "${BLUE}▶️ Starting service $SERVICE_NAME...${RESET}"
+sudo systemctl daemon-reload
 sudo systemctl enable "$SERVICE_NAME"
-sudo systemctl start "$SERVICE_NAME"
+sudo systemctl restart "$SERVICE_NAME"
 
 echo -e "${GREEN}✅ $SITE successfully deployed!${RESET}"
 echo -e "${YELLOW}Assigned port: $PORT${RESET}"
