@@ -1,8 +1,0 @@
-add-site.sh
-add-deploy.sh
-remove-site.sh
-deploy-site.sh
-enable-kestrel.sh
-enable-ssh.sh
-enable-ufw.sh
-enable-webserver-ufw.sh
