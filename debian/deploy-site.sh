@@ -1,6 +1,6 @@
 #!/bin/bash
-# Deploy .NET app with safe stop → copy → start, auto DLL detection, colored output, and permission fix
-# version: 1.73
+# Deploy .NET app safely with systemd, preserving .env and fixing permissions
+# version: 1.80
 
 set -e
 
@@ -22,21 +22,22 @@ SITE_DIR="$WEB_ROOT/$SITE"
 REPO_URL="git@github.com:travusgonzalez/darkwinter.xyz.git"
 BUILD_DIR="$SITE_DIR/build"
 SERVICE_NAME="kestrel@${SITE}"
-
-# Fix ownership & permissions
-echo -e "${YELLOW}🔧 Fixing permissions for deploy user and service...${RESET}"
-sudo mkdir -p "$SITE_DIR"
-sudo chown -R $USER:$USER "$SITE_DIR"
-sudo chmod -R 755 "$SITE_DIR"
-
-# Backup existing .env
 ENV_FILE="$SITE_DIR/.env"
+
+# 1️⃣ Fix ownership and permissions
+echo -e "${YELLOW}🔧 Fixing permissions...${RESET}"
+sudo mkdir -p "$SITE_DIR"
+sudo chown -R $USER:www-data "$SITE_DIR"
+sudo chmod -R 755 "$SITE_DIR"
+sudo chmod 644 "$ENV_FILE" 2>/dev/null || true
+
+# 2️⃣ Backup .env
 if [ -f "$ENV_FILE" ]; then
     echo -e "${YELLOW}Backing up existing .env...${RESET}"
     sudo cp "$ENV_FILE" "$ENV_FILE.bak"
 fi
 
-# Pull latest code (run as current user)
+# 3️⃣ Pull latest code
 if [ ! -d "$SITE_DIR/.git" ]; then
     echo -e "${BLUE}Initializing repository in $SITE_DIR...${RESET}"
     git init "$SITE_DIR"
@@ -50,39 +51,38 @@ else
     git -C "$SITE_DIR" clean -fd
 fi
 
-# Restore .env
+# 4️⃣ Restore .env
 if [ -f "$ENV_FILE.bak" ]; then
     echo -e "${YELLOW}Restoring .env...${RESET}"
     sudo mv "$ENV_FILE.bak" "$ENV_FILE"
 fi
 
-# Build the app
+# 5️⃣ Build the app
 echo -e "${BLUE}📦 Publishing .NET app...${RESET}"
 dotnet publish "$SITE_DIR" -c Release -o "$BUILD_DIR"
 
-# Detect the main DLL by project name
+# 6️⃣ Detect main DLL
 DLL_PATH=$(find "$BUILD_DIR" -maxdepth 1 -type f -name "${SITE}.dll" | head -n 1)
 DLL_NAME=$(basename "$DLL_PATH")
-
 if [ -z "$DLL_NAME" ] || [ ! -f "$DLL_PATH" ]; then
     echo -e "${RED}❌ Could not find main DLL: ${SITE}.dll in $BUILD_DIR${RESET}"
     exit 1
 fi
 echo -e "${GREEN}Detected main DLL: $DLL_NAME${RESET}"
 
-# Stop service if running
+# 7️⃣ Stop service if running
 if systemctl is-active --quiet "$SERVICE_NAME"; then
     echo -e "${YELLOW}🛑 Stopping service $SERVICE_NAME...${RESET}"
     sudo systemctl stop "$SERVICE_NAME"
 fi
 
-# Deploy published app
+# 8️⃣ Deploy published app (preserve .env)
 echo -e "${BLUE}🚀 Deploying published app...${RESET}"
 sudo find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.env' ! -name 'build' -exec rm -rf {} +
 sudo cp -r "$BUILD_DIR"/* "$SITE_DIR/"
 sudo rm -rf "$BUILD_DIR"
 
-# Update systemd service to point to correct DLL
+# 9️⃣ Update systemd service
 SERVICE_FILE="/etc/systemd/system/kestrel@.service"
 sudo tee "$SERVICE_FILE" > /dev/null <<EOL
 [Unit]
@@ -105,10 +105,11 @@ WantedBy=multi-user.target
 EOL
 
 sudo systemctl daemon-reload
+
+# 10️⃣ Enable + start service
 echo -e "${BLUE}▶️ Starting service $SERVICE_NAME...${RESET}"
 sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl start "$SERVICE_NAME"
 
 echo -e "${GREEN}✅ Deployment complete for $SITE.${RESET}"
-
-echo -e "${GREEN}You can check service status with: sudo systemctl status $SERVICE_NAME${RESET}"
+echo -e "${GREEN}You can check the service status with:${RESET} ${YELLOW}sudo systemctl status $SERVICE_NAME${RESET}"
